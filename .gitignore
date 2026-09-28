@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+contracts/lib/
+.test-build/
+*.egg-info/
+.local/
