@@ -2,13 +2,15 @@
 
 AI performs the work. Deterministic software verifies it. Monad records and settles the verified outcome.
 
-## Current feature: wallet connection and sign-in
+## Implemented features: wallet sign-in and task creation
 
 This feature includes a responsive Stitch-inspired wallet-access screen, browser-wallet discovery (EIP-6963 with injected-wallet fallback), Monad Testnet switching, signed login challenges, protected API identity, and logout.
 
 Authentication supports ordinary EOA browser wallets. Smart-contract wallet signatures and WalletConnect are not implemented. A network check guides the UI; a login signature proves account ownership, not the wallet's currently selected network.
 
-No task creation, execution, funding, or settlement is connected to this feature. The earlier `contracts/` files are preliminary work and are not deployed or used here.
+After signing in, create an unfunded task using the bundled Python access-control demo. Enter requirements and a proposed MON reward, then select **Save task**. The saved page shows the task's metadata hash and checks it in the browser. Retain the page URL to return after a refresh and new sign-in.
+
+Funding, agent execution, and settlement are not implemented. The earlier `contracts/` files remain preliminary and are not deployed or used here.
 
 ## Local development on Windows
 
@@ -38,7 +40,7 @@ Then, from `apps/api`:
 .venv/Scripts/python.exe -m uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000
 ```
 
-`app.db` explicitly creates the feature's two tables. API startup never changes schema. Introduce versioned migrations when the next feature changes this schema.
+`app.db` explicitly applies numbered, transactional migrations. It adopts the existing authentication tables and adds tasks without resetting users or sessions. Re-running it is safe. API startup never changes schema. Keep the repository's `demo/python-access` directory alongside `apps/` when deploying; task creation reads only those fixed bundled files.
 
 ### Frontend
 
@@ -87,7 +89,9 @@ npm.cmd run build
 
 With the API running, `node tests/live-auth.mjs` checks real viem signatures against the local API and database. It creates one throwaway wallet identity in development data, never submits a transaction, and prints no keys or tokens.
 
-Validated during feature-1 implementation: 15 API tests on PostgreSQL (including concurrent replay), 7 frontend controller tests, the production frontend build, and the live signature/API/database smoke test. The browser-control connection was unavailable, so visual browser review and a real extension confirmation still require the manual checks below.
+For task creation, run `node tests/live-task.mjs` with both local servers running. It saves a task with a throwaway wallet identity in the development database and checks hash reproduction, exact reward storage, retries, and retrieval. It sends no blockchain transaction.
+
+Validation includes PostgreSQL API tests (authentication, task ownership, concurrent replay and concurrent creation), frontend controller/reward/hash tests, the production build, and live signature/task integration checks. Browser automation is unavailable, so visual browser review and a real extension confirmation still require manual checks.
 
 Manual wallet acceptance:
 
@@ -99,6 +103,17 @@ Manual wallet acceptance:
 6. Sign out, then reload: a new signature is required.
 7. With no extension or an unavailable API, the page provides an actionable error.
 
+Manual task-creation acceptance:
+
+1. Sign in and choose **Use demo instructions**, or enter your own title and requirements.
+2. Set a positive reward. Inputs with more than 18 decimal places are rejected rather than rounded.
+3. Select **Save task**. The result must say awaiting funding, with no wallet transaction.
+4. Confirm that the metadata hash matches, then reload and sign in again. The saved URL must reopen the task.
+5. Switch wallets: the other wallet cannot read the saved task.
+6. Select **Create another task** to return to a fresh form.
+
+Task drafts and retry identifiers use wallet-scoped browser session storage; JWTs remain memory-only. No draft data is shared with an AI provider in this feature.
+
 ## Authentication behavior
 
 - Five-minute challenges bind the exact configured origin, chain, checksum address, random nonce, timestamps, and request ID. The client signs the server's exact EIP-191 message.
@@ -109,5 +124,7 @@ Manual wallet acceptance:
 - `GET /api/v1/auth/me` demonstrates protected API access; connecting a wallet alone never authenticates a request.
 
 API routes: `POST /auth/nonce`, `POST /auth/verify`, `GET /auth/me`, `POST /auth/logout`, under `/api/v1`. `/api/v1/health` is process liveness only, not a database readiness check.
+
+Task routes: authenticated `GET /tasks/templates`, `POST /tasks` (UUID `Idempotency-Key` header required), and owner-only `GET /tasks/{uuid}`. The creation body contains `title`, `description`, `templateId`, `repositoryRevision`, and `rewardWei` as a decimal integer string. Repository and verification configuration are server-owned. [Feature 2 details](docs/Feature%202%20-%20Task%20Creation.md) describe canonical hashing and the funding boundary.
 
 Implementation references: [viem signing](https://viem.sh/docs/actions/wallet/signMessage), [ERC-4361 message fields](https://eips.ethereum.org/EIPS/eip-4361), [Monad network information](https://docs.monad.xyz/developer-essentials/testnet).

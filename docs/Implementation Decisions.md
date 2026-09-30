@@ -16,10 +16,10 @@ The user approved the review recommendations on September 29, 2026. These decisi
 
 ## Feature-by-feature delivery
 
-The user subsequently requested separate feature approvals instead of implementing the whole initial milestone at once. Only feature 1 is currently authorized for implementation.
+The user subsequently requested separate feature approvals instead of implementing the whole initial milestone at once. Feature 1 is implemented; the user approved feature 2 on September 30, 2026. Later features still require approval.
 
-1. Wallet connection and sign-in (current feature).
-2. Task creation.
+1. Wallet connection and sign-in (implemented).
+2. Task creation (current feature).
 3. Escrow funding and refunds.
 4. Task dashboard and details.
 5. CodeWolf registration and assignment.
@@ -41,6 +41,16 @@ The initial escrow contract and tests predate this narrower scope; feature 1 doe
 - PostgreSQL runtime; an isolated SQLite test fixture is used only for fast API tests. PostgreSQL integration tests use a separate database and temporary schemas.
 - The user requested local PostgreSQL setup. Use project-local official binaries, loopback-only port 55432, password authentication, and a non-superuser app role. No system service.
 - React build uses the previously discussed Vite tooling. Database bootstrap is explicit for this first schema; migrations are deferred until schema evolution is needed. web3.py is not needed for signature recovery in this feature.
+
+### Feature 2 decisions
+
+- The user selected a bundled Python demo instead of an external repository. Use `demo/python-access`, with five fixed tests and an intentionally broken access-control function. This is separate from application authentication.
+- Store the demo file snapshot alongside each task and identify it by SHA-256 of its canonical file map. This is a content revision, not a Git commit. Task/policy commitments continue to use Keccak-256.
+- Server owns the template, allowed paths, and test policy. Task creation accepts no arbitrary URL, branch, command, owner, or status.
+- Save `AWAITING_FUNDING` tasks; no on-chain calls, claims of funded escrow, or agent assignment.
+- Scope UUID idempotency keys to the authenticated creator. Same payload returns the existing task; changed payload with the same key returns a conflict.
+- Use frozen, numbered SQLAlchemy migrations for the existing authentication schema and new task table. No additional migration dependency is introduced.
+- Current `taskHash` commits to metadata, creator, chain, exact reward, repository snapshot revision, and test policy. Because no escrow deployment exists yet, this is explicitly a metadata commitment, not a contract-bound funding authorization. Feature 3 must define the deployment-bound funding commitment before accepting money; preserve this metadata hash and do not silently rewrite it.
 
 ## Design reference
 

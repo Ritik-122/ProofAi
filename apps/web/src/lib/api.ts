@@ -2,12 +2,16 @@ export type Challenge = { challengeId: string; message: string; expiresAt: strin
 export type Token = { accessToken: string; expiresAt: string };
 export type User = { id: string; walletAddress: string; chainId: number; expiresAt: string };
 
-export async function api<T>(path: string, body?: unknown, token?: string): Promise<T> {
+export class ApiError extends Error {
+  constructor(message: string, public status: number, public code?: string) { super(message); }
+}
+
+export async function api<T>(path: string, body?: unknown, token?: string, extraHeaders: Record<string, string> = {}, method?: 'DELETE'): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`/api/v1${path}`, {
-      method: body === undefined ? 'GET' : 'POST',
-      headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      method: method ?? (body === undefined ? 'GET' : 'POST'),
+      headers: { ...extraHeaders, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
         ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(15000),
@@ -17,7 +21,7 @@ export async function api<T>(path: string, body?: unknown, token?: string): Prom
   }
   if (!response.ok) {
     const data = await response.json().catch(() => null);
-    throw new Error(data?.error?.message ?? 'ProofAI could not complete this request. Please try again.');
+    throw new ApiError(data?.error?.message ?? 'ProofAI could not complete this request. Please try again.', response.status, data?.error?.code);
   }
   return response.status === 204 ? undefined as T : response.json();
 }

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Uuid, create_engine
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint, Uuid, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -29,12 +29,38 @@ class AuthSession(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
 
 
-def initialize_database() -> None:
-    """Explicit bootstrap for the first feature; never mutate schema on API startup."""
-    from app.config import Settings
+class Task(Base):
+    __tablename__ = "tasks"
+    __table_args__ = (
+        UniqueConstraint("creator_id", "request_id", name="uq_task_creator_request"),
+        CheckConstraint("reward_wei > 0", name="ck_task_positive_reward"),
+        CheckConstraint("status = 'AWAITING_FUNDING'", name="ck_task_initial_status"),
+    )
 
-    engine = create_engine(Settings().database_url)
-    Base.metadata.create_all(engine)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    creator_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
+    request_id: Mapped[uuid.UUID] = mapped_column(Uuid)
+    request_payload: Mapped[str] = mapped_column(Text)
+    title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text)
+    template_id: Mapped[str] = mapped_column(String(80))
+    repository_revision: Mapped[str] = mapped_column(String(80))
+    repository_snapshot: Mapped[str] = mapped_column(Text)
+    reward_wei: Mapped[str] = mapped_column(Numeric(78, 0).with_variant(String(78), "sqlite"))
+    status: Mapped[str] = mapped_column(String(40))
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    canonical_payload: Mapped[str] = mapped_column(Text)
+    task_hash: Mapped[str] = mapped_column(String(66))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+def initialize_database() -> None:
+    """Apply explicit versioned migrations; never mutate schema on API startup."""
+    from app.config import Settings
+    from app.migrations import migrate
+
+    engine = create_engine(Settings().database_url, connect_args={"connect_timeout": 5})
+    migrate(engine)
     engine.dispose()
 
 

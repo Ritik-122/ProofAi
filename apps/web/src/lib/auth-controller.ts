@@ -1,6 +1,6 @@
 import { createWalletClient, custom, getAddress, type EIP1193Provider } from 'viem';
 import { monadTestnet } from 'viem/chains';
-import { authApi, type User } from './api.js';
+import { api as httpApi, ApiError, authApi, type User } from './api.js';
 
 export const network = monadTestnet;
 export type Provider = EIP1193Provider;
@@ -26,6 +26,22 @@ export class AuthController {
   constructor(private api = authApi) {}
   snapshot = () => this.state;
   subscribe = (fn: () => void) => { this.listeners.add(fn); return () => { this.listeners.delete(fn); }; };
+  async request<T>(path: string, body?: unknown, requestId?: string, method?: 'DELETE'): Promise<T> {
+    if (!this.token || !this.state.user) throw new Error('Sign in before continuing.');
+    const epoch = this.epoch;
+    try {
+      const result = await httpApi<T>(path, body, this.token, requestId ? { 'Idempotency-Key': requestId } : {}, method);
+      if (epoch !== this.epoch) throw new Error('Your wallet session changed. Sign in again to continue.');
+      return result;
+    } catch (error) {
+      if (epoch === this.epoch && error instanceof ApiError && error.status === 401) {
+        this.epoch++;
+        this.clearSession();
+        this.set({ error: 'Your session expired. Sign in again to continue.' });
+      }
+      throw error;
+    }
+  }
   private set(patch: Partial<State>) {
     this.state = { ...this.state, ...patch };
     this.listeners.forEach(fn => fn());

@@ -11,11 +11,13 @@ from sqlalchemy.orm import sessionmaker
 
 from app.auth import AuthError, router
 from app.config import Settings
+from app.tasks import router as tasks_router
 
 
 def create_app(settings: Settings | None = None, engine=None) -> FastAPI:
     config = settings or Settings()
-    db_engine = engine if engine is not None else create_engine(config.database_url, pool_pre_ping=True)
+    db_engine = engine if engine is not None else create_engine(config.database_url, pool_pre_ping=True,
+                                                               connect_args={"connect_timeout": 5})
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -26,7 +28,7 @@ def create_app(settings: Settings | None = None, engine=None) -> FastAPI:
     app.state.config = config
     app.state.sessions = sessionmaker(db_engine, expire_on_commit=False)
     app.add_middleware(CORSMiddleware, allow_origins=[config.app_origin],
-                       allow_methods=["GET", "POST"], allow_headers=["Authorization", "Content-Type"])
+                       allow_methods=["GET", "POST", "DELETE"], allow_headers=["Authorization", "Content-Type", "Idempotency-Key"])
 
     @app.middleware("http")
     async def request_context(request: Request, call_next):
@@ -51,13 +53,14 @@ def create_app(settings: Settings | None = None, engine=None) -> FastAPI:
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError):
-        return error(request, "INVALID_REQUEST", "Check the wallet address, challenge ID, and signature format.", 422)
+        return error(request, "INVALID_REQUEST", "Check the required fields and their formats.", 422)
 
     @app.exception_handler(SQLAlchemyError)
     async def database_error(request: Request, exc: SQLAlchemyError):
-        return error(request, "DATABASE_UNAVAILABLE", "Sign-in is temporarily unavailable. Please try again.", 503)
+        return error(request, "DATABASE_UNAVAILABLE", "ProofAI is temporarily unavailable. Please try again.", 503)
 
     app.include_router(router, prefix="/api/v1")
+    app.include_router(tasks_router, prefix="/api/v1")
 
     @app.get("/api/v1/health")
     def health():

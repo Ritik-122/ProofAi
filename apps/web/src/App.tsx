@@ -2,6 +2,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from './lib/api';
 import { AuthController, discoverWallets, network, type WalletChoice } from './lib/auth-controller';
+import { TaskWorkspace } from './TaskWorkspace';
 
 function Mark({ small = false }: { small?: boolean }) {
   return <svg width={small ? 26 : 48} height={small ? 26 : 48} viewBox="0 0 48 48" fill="none" aria-hidden="true">
@@ -40,6 +41,7 @@ export function App() {
       <div className="header-right"><span className="network-label"><i className="dot" /> Monad Testnet</span><span className="header-divider" /><span className="muted text-sm">Your agent. Verified.</span></div>
     </header>
     <main id="main" className="main">
+      {authenticated ? <TaskWorkspace key={state.user!.id} controller={controller} wallet={state.user!.walletAddress} /> : <>
       <div className="eyebrow"><span className="tiny-square" /> PROOFAI WORKSPACE <span className="slash">/</span> WALLET ACCESS</div>
       <div className="access-grid">
         <section className="intro">
@@ -71,6 +73,7 @@ export function App() {
         </section>
       </div>
       <div className="principle"><span className="overline">THE PROOFAI PRINCIPLE</span><p>AI performs the work.<span> Software verifies it.</span> Monad records the outcome.</p><span className="principle-arrow" aria-hidden="true">↗</span></div>
+      </>}
     </main>
     <footer><span><i className={`dot ${health.isSuccess ? '' : 'neutral-dot'}`} />{health.isSuccess ? 'API connected' : health.isPending ? 'Checking API…' : 'API unavailable'}</span><span className="footer-right">ProofAI <span className="slash">/</span> Built for verifiable work</span></footer>
   </div>;

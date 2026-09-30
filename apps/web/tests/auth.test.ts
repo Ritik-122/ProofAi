@@ -119,3 +119,44 @@ test('API outage does not authenticate the wallet', async () => {
   assert.match(f.controller.snapshot().error!, /API unavailable/);
   f.controller.disconnect();
 });
+
+test('protected task request requires authentication', async () => {
+  const f = fixture();
+  await assert.rejects(f.controller.request('/tasks/templates'), /Sign in/);
+});
+
+test('protected request discards a result after account change', async () => {
+  const f = fixture();
+  await f.controller.connect(f.provider); await f.controller.signIn();
+  const original = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => {
+      f.changeAccount();
+      return new Response(JSON.stringify({ id: 'old-wallet-task' }), { status: 200 });
+    };
+    await assert.rejects(f.controller.request('/tasks/task-id'), /session changed/);
+  } finally {
+    globalThis.fetch = original;
+    f.controller.disconnect();
+  }
+});
+
+
+test('delete sends authenticated DELETE and accepts an empty response', async () => {
+  const f = fixture();
+  await f.controller.connect(f.provider); await f.controller.signIn();
+  const original = globalThis.fetch;
+  try {
+    globalThis.fetch = async (url, options) => {
+      assert.equal(url, '/api/v1/tasks/task-id');
+      assert.equal(options?.method, 'DELETE');
+      assert.ok(new Headers(options?.headers).get('Authorization')?.startsWith('Bearer '));
+      assert.equal(options?.body, undefined);
+      return new Response(null, { status: 204 });
+    };
+    assert.equal(await f.controller.request('/tasks/task-id', undefined, undefined, 'DELETE'), undefined);
+  } finally {
+    globalThis.fetch = original;
+    f.controller.disconnect();
+  }
+});
